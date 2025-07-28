@@ -31,7 +31,7 @@ func main() {
 	}
 
 	bot.Handle(tb.OnText, func(c tb.Context) error {
-		return c.Send("Привіт! Я отримав твоє повідомлення: " + c.Text())
+		return c.Send("Привіт Михайлику! Я отримав твоє повідомлення: " + c.Text())
 	})
 
 	log.Println("Бот запущено!")
