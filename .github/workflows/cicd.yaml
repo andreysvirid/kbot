@@ -16,13 +16,13 @@ jobs:
       ARCH: amd64
 
     steps:
-      # 1️⃣ Checkout repository
+      # 1️⃣ Checkout repository (полное клонирование)
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          ref: develop      # просто имя ветки, без origin/
+          ref: develop
           token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0    # полный history для возможности пуша изменений
+          fetch-depth: 0   # важно для push и корректного checkout
 
       # 2️⃣ Set up Docker Buildx
       - name: Set up Docker Buildx
@@ -51,7 +51,7 @@ jobs:
             --push \
             .
 
-      # 6️⃣ Install yq v4 (для редактирования Helm values)
+      # 6️⃣ Install yq v4
       - name: Install yq v4
         run: |
           sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
