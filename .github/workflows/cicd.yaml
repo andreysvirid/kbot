@@ -34,6 +34,13 @@ jobs:
           git commit -m "Update image tag"
           git push
 
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          sudo install -m 555 argocd /usr/local/bin/argocd
+
       - name: Sync ArgoCD
         run: |
-          argocd app sync kbot             --auth-token ${{ secrets.ARGOCD_TOKEN }}             --server ${{ secrets.ARGOCD_SERVER }}
+          argocd app sync kbot \
+            --auth-token ${{ secrets.ARGOCD_TOKEN }} \
+            --server ${{ secrets.ARGOCD_SERVER }}
