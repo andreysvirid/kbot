@@ -1,0 +1,110 @@
+🔹 Скрипт для терминала
+# Перейти в папку с твоим репозиторием
+cd /путь/к/твоему/репозиторию
+
+# Создать бэкап старых файлов (на всякий случай)
+cp Makefile Makefile.bak
+cp helm/values.yaml helm/values.yaml.bak
+cp .github/workflows/cicd.yaml .github/workflows/cicd.yaml.bak
+
+# Перезаписать Makefile
+cat > Makefile << 'EOF'
+REGISTRY=ghcr.io
+REPO=den-vasyliev/kbot       # <- замени на свой GitHub username
+OS=linux
+ARCH=amd64
+TAG=$(shell git describe --tags --always)-$(OS)-$(ARCH)
+
+build:
+	docker buildx build --platform $(OS)/$(ARCH) -t $(REGISTRY)/$(REPO):$(TAG) .
+
+push:
+	docker push $(REGISTRY)/$(REPO):$(TAG)
+
+helm-update:
+	@sed -i "s|tag:.*|tag: \"$(TAG)\"|g" helm/values.yaml
+EOF
+
+# Перезаписать helm/values.yaml
+cat > helm/values.yaml << 'EOF'
+image:
+  registry: "ghcr.io"
+  repository: "den-vasyliev/kbot"   # <- замени на свой GitHub username
+  tag: "v1.0.0-106879e"
+  os: linux
+  arch: amd64
+
+replicaCount: 1
+EOF
+
+# Перезаписать workflow
+mkdir -p .github/workflows
+cat > .github/workflows/cicd.yaml << 'EOF'
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Docker Image
+        run: |
+          make build
+          make push
+
+      - name: Update Helm values
+        run: |
+          make helm-update
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add helm/values.yaml
+          git commit -m "Update image tag"
+          git push
+
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          sudo install -m 555 argocd /usr/local/bin/argocd
+
+      - name: Sync ArgoCD
+        run: |
+          argocd app sync kbot \
+            --auth-token ${{ secrets.ARGOCD_TOKEN }} \
+            --server ${{ secrets.ARGOCD_SERVER }}
+EOF
+
+# Добавить все изменения
+git add Makefile helm/values.yaml .github/workflows/cicd.yaml
+
+# Закоммитить
+git commit -m "Fix GHCR repo, update workflow with ArgoCD CLI"
+
+# Запушить в develop
+git push origin develop
+
+✅ Что делает этот скрипт
+
+Создаёт бэкап старых файлов на случай ошибки.
+
+Обновляет Makefile и helm/values.yaml с твоим GHCR namespace.
+
+Добавляет шаг установки ArgoCD CLI в workflow.
+
+Коммитит и пушит изменения в ветку develop.
+
+После этого GitHub Actions автоматически запустит CI/CD пайплайн.
