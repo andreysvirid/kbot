@@ -36,25 +36,20 @@ jobs:
 
       # 4️⃣ Формируем тег образа
       - name: Set image tag
-        id: vars
         run: |
           SHORT_SHA=$(git rev-parse --short HEAD)
           echo "IMAGE_TAG=v1.0.0-${SHORT_SHA}-${OS}-${ARCH}" >> $GITHUB_ENV
 
-      # 5️⃣ Сборка Docker image
-      - name: Build Docker image
+      # 5️⃣ Build & Push Docker image сразу
+      - name: Build and Push Docker image
         run: |
           docker buildx build \
             --platform ${{ env.OS }}/amd64 \
             -t ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG }} \
+            --push \
             .
 
-      # 6️⃣ Push Docker image в GHCR
-      - name: Push Docker image
-        run: |
-          docker push ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG }}
-
-      # 7️⃣ Обновляем helm/values.yaml (опционально)
+      # 6️⃣ Обновляем helm/values.yaml (опционально)
       - name: Update helm/values.yaml
         run: |
           sudo apt-get update && sudo apt-get install -y yq
