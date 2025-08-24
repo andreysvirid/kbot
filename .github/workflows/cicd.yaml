@@ -16,19 +16,22 @@ jobs:
       ARCH: amd64
 
     steps:
-      # 1️⃣ Checkout repository (полное клонирование)
+      # 1️⃣ Проверка доступных веток
+      - name: List remote branches
+        run: git ls-remote --heads https://github.com/andreysvirid/kbot_CICD.git
+
+      # 2️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
           ref: develop
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0   # важно для push и корректного checkout
+          fetch-depth: 0  # полное клонирование
 
-      # 2️⃣ Set up Docker Buildx
+      # 3️⃣ Set up Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 3️⃣ Log in to GHCR
+      # 4️⃣ Log in to GHCR
       - name: Log in to GHCR
         uses: docker/login-action@v2
         with:
@@ -36,13 +39,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 4️⃣ Set image tag
+      # 5️⃣ Set image tag
       - name: Set image tag
         run: |
           SHORT_SHA=$(git rev-parse --short HEAD)
           echo "IMAGE_TAG=v1.0.0-${SHORT_SHA}-${OS}-${ARCH}" >> $GITHUB_ENV
 
-      # 5️⃣ Build and Push Docker image
+      # 6️⃣ Build and Push Docker image
       - name: Build and Push Docker image
         run: |
           docker buildx build \
@@ -51,13 +54,13 @@ jobs:
             --push \
             .
 
-      # 6️⃣ Install yq v4
+      # 7️⃣ Install yq v4 (для работы с helm/values.yaml)
       - name: Install yq v4
         run: |
           sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
           sudo chmod +x /usr/local/bin/yq
 
-      # 7️⃣ Update helm/values.yaml
+      # 8️⃣ Update helm/values.yaml
       - name: Update helm/values.yaml
         run: |
           yq e -i ".image.tag = \"${IMAGE_TAG}\"" helm/values.yaml
