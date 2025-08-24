@@ -20,7 +20,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          ref: develop
+          ref: develop      # просто имя ветки, без origin/
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0    # полный history для возможности пуша изменений
 
       # 2️⃣ Set up Docker Buildx
       - name: Set up Docker Buildx
@@ -49,10 +51,10 @@ jobs:
             --push \
             .
 
-      # 6️⃣ Install yq v4
+      # 6️⃣ Install yq v4 (для редактирования Helm values)
       - name: Install yq v4
         run: |
-          sudo wget https://github.com/mikefarah/yq/releases/download/v4.45.1/yq_linux_amd64 -O /usr/local/bin/yq
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
           sudo chmod +x /usr/local/bin/yq
 
       # 7️⃣ Update helm/values.yaml
