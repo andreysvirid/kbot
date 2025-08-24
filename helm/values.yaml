@@ -1,7 +1,7 @@
 image:
   registry: "ghcr.io"
   repository: "andreysvirid/kbot"
-  tag: "84cea97-linux-amd64"
+  tag: "v1.0.0-2"
   os: linux
   arch: amd64
 replicaCount: 1
