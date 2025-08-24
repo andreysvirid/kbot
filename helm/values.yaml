@@ -1,7 +1,7 @@
 image:
   registry: "ghcr.io"
   repository: "andreysvirid/kbot"
-  tag: "v1.0.0-0"
+  tag: "f34620a-linux-amd64"
   os: linux
   arch: amd64
 
