@@ -1,7 +1,7 @@
 image:
   registry: "ghcr.io"
-  repository: "your-username/kbot"
-  tag: "v1.0.0-106879e"
+  repository: "andreysvirid/kbot"
+  tag: "v1.0.0-0"
   os: linux
   arch: amd64
 

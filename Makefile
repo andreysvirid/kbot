@@ -1,5 +1,5 @@
 REGISTRY=ghcr.io
-REPO=your-username/kbot
+REPO=andreysvirid/kbot
 OS=linux
 ARCH=amd64
 TAG=$(shell git describe --tags --always)-$(OS)-$(ARCH)
