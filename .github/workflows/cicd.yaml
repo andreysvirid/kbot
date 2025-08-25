@@ -5,6 +5,10 @@ on:
     branches:
       - develop
 
+permissions:
+  contents: write    # нужно, чтобы пушить изменения в repo
+  packages: write    # нужно, чтобы пушить docker-образы в GHCR
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -16,12 +20,11 @@ jobs:
       ARCH: amd64
 
     steps:
-      # 1️⃣ Checkout repository
+      # 1️⃣ Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
           ref: develop
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       # 2️⃣ Set up Docker Buildx
       - name: Set up Docker Buildx
@@ -39,40 +42,34 @@ jobs:
       - name: Set image tag
         run: |
           SHORT_SHA=$(git rev-parse --short HEAD)
-          IMAGE_TAG="v1.0.0-${SHORT_SHA}-${OS}-${ARCH}"
-          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
-          echo "IMAGE_FULL=${IMAGE_REGISTRY}/${IMAGE_REPOSITORY}:${IMAGE_TAG}" >> $GITHUB_ENV
-          echo "IMAGE_TAG=${IMAGE_TAG}"
-          echo "IMAGE_FULL=${IMAGE_FULL}"
+          echo "IMAGE_TAG=v1.0.0-${SHORT_SHA}" >> $GITHUB_ENV
 
       # 5️⃣ Build and Push Docker image
       - name: Build and Push Docker image
         run: |
           docker buildx build \
-            --platform ${{ env.OS }}/amd64 \
-            -t ${{ env.IMAGE_FULL }} \
+            --platform ${{ env.OS }}/${{ env.ARCH }} \
+            -t ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG }} \
             --push \
             .
 
-      # 6️⃣ Install yq v4
+      # 6️⃣ Install yq
       - name: Install yq v4
         run: |
-          sudo curl -L https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /usr/local/bin/yq
+          sudo wget https://github.com/mikefarah/yq/releases/download/v4.45.1/yq_linux_amd64 -O /usr/local/bin/yq
           sudo chmod +x /usr/local/bin/yq
-          yq --version
 
       # 7️⃣ Update helm/values.yaml
       - name: Update helm/values.yaml
         run: |
+          yq e -i ".image.registry = \"${IMAGE_REGISTRY}\"" helm/values.yaml
+          yq e -i ".image.repository = \"${IMAGE_REPOSITORY}\"" helm/values.yaml
           yq e -i ".image.tag = \"${IMAGE_TAG}\"" helm/values.yaml
           yq e -i ".image.os = \"${OS}\"" helm/values.yaml
           yq e -i ".image.arch = \"${ARCH}\"" helm/values.yaml
 
-      # 8️⃣ Commit and push updated helm values
-      - name: Commit and push updated helm values
-        run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add helm/values.yaml
-          git commit -m "Update image tag to ${IMAGE_TAG}" || echo "No changes to commit"
-          git push https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} develop || echo "Push failed, maybe no changes"
+          git commit -m "Update image tag to ${{ env.IMAGE_TAG }}" || echo "No changes to commit"
+          git push origin HEAD:develop
