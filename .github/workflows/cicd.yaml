@@ -1,54 +1,87 @@
 name: kbot
 
-on: push
+on:
+  push:
+    branches: [ develop ]
 
 env:
   TARGETARCH: amd64
-  
+  TARGETOS: linux
+  IMAGE_REGISTRY: ghcr.io
+  IMAGE_REPOSITORY: andreysvirid/kbot
+
 jobs:
   ci:
     name: CI
     runs-on: ubuntu-latest
 
     steps:
-                          
+      # 1️⃣ Checkout develop
       - name: Checkout
         uses: actions/checkout@v3
         with:
+          ref: develop
           fetch-depth: 0
 
-      - name: Run test
+      # 2️⃣ Run tests
+      - name: Run tests
         run: make test
 
-      - name: Docker Hub login
+      # 3️⃣ Log in to GHCR
+      - name: GHCR login
         uses: docker/login-action@v2
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build&Push
-        env:
-          APP: "kbot"
-          REGISTRY: ${{ secrets.DOCKERHUB_USERNAME }}
-        run: make image push TARGETARCH=$TARGETARCH
+          registry: ${{ env.IMAGE_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 4️⃣ Build & push Docker image
+      - name: Build & Push
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          IMAGE_TAG="v1.0.0-${SHORT_SHA}-${TARGETOS}-${TARGETARCH}"
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+          docker buildx build \
+            --platform ${{ env.TARGETOS }}/$TARGETARCH \
+            -t ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${IMAGE_TAG} \
+            --push \
+            .
+
+      # 5️⃣ Clean
       - name: Clean
         run: make clean TARGETARCH=$TARGETARCH
-      
+
   cd:
     name: CD
     needs: ci
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-    - run: echo "VERSION=$(git describe --tags --abbrev=0)-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+      # 1️⃣ Checkout develop
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: develop
+          fetch-depth: 0
 
-    - uses: mikefarah/yq@master
-      with:
-        cmd: yq -i '.image.tag=strenv(VERSION) | .image.arch=strenv(TARGETARCH)' helm/values.yaml
-    - run: |
-        git config user.name github-actions
-        git config user.email github-actions@github.com
-        git commit -am "update version $VERSION"
-        git push
+      # 2️⃣ Set version
+      - name: Set version
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          VERSION="v1.0.0-${SHORT_SHA}-${TARGETOS}-${TARGETARCH}"
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+
+      # 3️⃣ Update Helm values
+      - name: Update Helm chart
+        uses: mikefarah/yq@master
+        with:
+          cmd: yq -i '.image.tag=strenv(VERSION) | .image.arch=strenv(TARGETARCH)' helm/values.yaml
+
+      # 4️⃣ Commit changes
+      - name: Commit Helm chart changes
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add helm/values.yaml
+          git commit -m "update version $VERSION" || echo "No changes to commit"
+          git push origin develop
