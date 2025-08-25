@@ -1,4 +1,4 @@
-name: kbot
+name: kbot-CI-CD
 
 on:
   push:
@@ -16,16 +16,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout develop
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          ref: develop
-          fetch-depth: 0
+      # 1️⃣ Checkout develop into unique tmp dir
+      - name: Checkout develop
+        run: |
+          REPO_DIR="/tmp/kbot-$(date +%s%N)"
+          git clone --depth 1 --branch develop https://github.com/den-vasyliev/kbot.git "$REPO_DIR"
+          echo "REPO_DIR=$REPO_DIR" >> $GITHUB_ENV
+        shell: bash
 
       # 2️⃣ Run tests
       - name: Run tests
-        run: make test
+        run: |
+          cd $REPO_DIR
+          make test
 
       # 3️⃣ Log in to GHCR
       - name: GHCR login
@@ -35,25 +38,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 4️⃣ Build & push Docker image
-      - name: Build & Push
+      # 4️⃣ Build & Push Docker image
+      - name: Build & Push Docker image
         run: |
+          cd $REPO_DIR
           SHORT_SHA=$(git rev-parse --short HEAD)
           IMAGE_TAG="v1.0.0-${SHORT_SHA}-${TARGETOS}-${TARGETARCH}"
           echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
           docker buildx build \
-            --platform ${{ env.TARGETOS }}/$TARGETARCH \
+            --platform $TARGETOS/$TARGETARCH \
             -t ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${IMAGE_TAG} \
             --push \
             .
 
-      # 5️⃣ Clean safely
+      # 5️⃣ Clean
       - name: Clean
         run: |
-          rm -rf kbot
-          if docker image inspect ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${IMAGE_TAG} > /dev/null 2>&1; then
-              docker rmi ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${IMAGE_TAG}
-          fi
+          cd $REPO_DIR
+          make clean TARGETARCH=$TARGETARCH
 
   cd:
     name: CD
@@ -62,30 +64,25 @@ jobs:
 
     steps:
       # 1️⃣ Checkout develop
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          ref: develop
-          fetch-depth: 0
-
-      # 2️⃣ Set version
-      - name: Set version
+      - name: Checkout develop
         run: |
-          SHORT_SHA=$(git rev-parse --short HEAD)
-          VERSION="v1.0.0-${SHORT_SHA}-${TARGETOS}-${TARGETARCH}"
-          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          REPO_DIR="/tmp/kbot-$(date +%s%N)"
+          git clone --depth 1 --branch develop https://github.com/den-vasyliev/kbot.git "$REPO_DIR"
+          echo "REPO_DIR=$REPO_DIR" >> $GITHUB_ENV
+        shell: bash
 
-      # 3️⃣ Update Helm chart
+      # 2️⃣ Update Helm values
       - name: Update Helm chart
         uses: mikefarah/yq@master
         with:
-          cmd: yq -i '.image.tag=strenv(VERSION) | .image.arch=strenv(TARGETARCH)' helm/values.yaml
+          cmd: yq -i '.image.tag=strenv(IMAGE_TAG) | .image.arch=strenv(TARGETARCH)' ${{ env.REPO_DIR }}/helm/values.yaml
 
-      # 4️⃣ Commit Helm chart changes
+      # 3️⃣ Commit Helm chart changes
       - name: Commit Helm chart changes
         run: |
+          cd $REPO_DIR
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add helm/values.yaml
-          git commit -m "update version $VERSION" || echo "No changes to commit"
+          git commit -m "Update image tag to $IMAGE_TAG" || echo "No changes to commit"
           git push origin develop
