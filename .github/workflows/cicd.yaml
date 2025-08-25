@@ -16,11 +16,11 @@ jobs:
       ARCH: amd64
 
     steps:
-      # 1️⃣ Клонируем репозиторий вручную (как требует тест)
-      - name: Checkout repository (develop branch)
-        run: |
-          git clone --depth 1 --branch develop https://github.com/andreysvirid/kbot_CICD.git .
-          git log -1 --oneline
+      # 1️⃣ Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          ref: develop
 
       # 2️⃣ Set up Docker Buildx
       - name: Set up Docker Buildx
@@ -34,12 +34,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 4️⃣ Set image tag
-      - name: Set image tag
+      # 4️⃣ Set unique image tag
+      - name: Set unique image tag
         run: |
           SHORT_SHA=$(git rev-parse --short HEAD)
-          echo "IMAGE_TAG=v1.0.0-${SHORT_SHA}-${OS}-${ARCH}" >> $GITHUB_ENV
-          echo "IMAGE_TAG=$IMAGE_TAG"
+          DATE=$(date +%Y%m%d%H%M%S)
+          IMAGE_TAG=v1.0.0-${SHORT_SHA}-${DATE}-${OS}-${ARCH}
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
 
       # 5️⃣ Build and Push Docker image
       - name: Build and Push Docker image
@@ -53,7 +54,7 @@ jobs:
       # 6️⃣ Install yq v4
       - name: Install yq v4
         run: |
-          sudo wget https://github.com/mikefarah/yq/releases/download/v4.45.1/yq_linux_amd64 -O /usr/local/bin/yq
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
           sudo chmod +x /usr/local/bin/yq
 
       # 7️⃣ Update helm/values.yaml
@@ -65,5 +66,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add helm/values.yaml
-          git commit -m "Update image tag to ${{ env.IMAGE_TAG }}" || echo "No changes to commit"
+          git commit -m "Update image tag to ${IMAGE_TAG}" || echo "No changes to commit"
           git push origin develop || echo "Push failed, maybe no changes"
