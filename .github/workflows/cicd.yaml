@@ -67,12 +67,14 @@ jobs:
           VERSION="v1.0.0-${SHORT_SHA}-${TARGETOS}-${TARGETARCH}"
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
 
-      # 3️⃣ Update Helm chart values
+# 3️⃣ Update Helm chart values
       - name: Update Helm chart
-        uses: mikefarah/yq@master
-        with:
-          cmd: yq -i '.image.tag=strenv(VERSION) | .image.os=strenv(TARGETOS) | .image.arch=strenv(TARGETARCH)' helm/values.yaml
-
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          VERSION="v1.0.0-${SHORT_SHA}"
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          yq -i '.image.tag=strenv(VERSION) | .image.os=strenv(TARGETOS) | .image.arch=strenv(TARGETARCH)' helm/values.yaml
+          
       # 4️⃣ Commit Helm chart changes
       - name: Commit Helm chart changes
         run: |
