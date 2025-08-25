@@ -1,17 +1,18 @@
-name: kbot CICD
+name: kbot
 
 on:
   push:
     branches: [ develop ]
 
 env:
-  TARGETOS: linux
   TARGETARCH: amd64
+  TARGETOS: linux
   IMAGE_REGISTRY: ghcr.io
   IMAGE_REPOSITORY: andreysvirid/kbot
 
 jobs:
-  build-and-push:
+  ci:
+    name: CI
     runs-on: ubuntu-latest
 
     steps:
@@ -19,42 +20,64 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
+          ref: develop
           fetch-depth: 0
 
-      # 2️⃣ Set image tag
-      - name: Set image tag
-        run: |
-          SHORT_SHA=$(git rev-parse --short HEAD)
-          IMAGE_TAG="v1.0.0-${SHORT_SHA}-${TARGETOS}-${TARGETARCH}"
-          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+      # 2️⃣ Run tests
+      - name: Run tests
+        run: make test
 
-      # 3️⃣ Update Helm values
-      - name: Update Helm chart
-        uses: mikefarah/yq@v4
-        with:
-          cmd: yq e -i '.image.tag = strenv(IMAGE_TAG) | .image.os = "linux" | .image.arch = "amd64"' helm/values.yaml
-
-      # 4️⃣ Commit Helm chart changes if any
-      - name: Commit Helm chart
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add helm/values.yaml
-          git diff --cached --quiet || git commit -m "Update image tag to $IMAGE_TAG"
-          git push origin develop
-
-      # 5️⃣ Log in to GHCR
-      - name: Log in to GHCR
+      # 3️⃣ Log in to GHCR
+      - name: GHCR login
         uses: docker/login-action@v2
         with:
           registry: ${{ env.IMAGE_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 6️⃣ Build and push Docker image
-      - name: Build & push Docker image
+      # 4️⃣ Build & push Docker image
+      - name: Build & Push
         run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          IMAGE_TAG="v1.0.0-${SHORT_SHA}-${TARGETOS}-${TARGETARCH}"
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
           docker buildx build \
             --platform ${{ env.TARGETOS }}/$TARGETARCH \
             -t ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${IMAGE_TAG} \
             --push \
+            .
+
+  cd:
+    name: CD
+    needs: ci
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Checkout develop
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      # 2️⃣ Set version
+      - name: Set version
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          VERSION="v1.0.0-${SHORT_SHA}-${TARGETOS}-${TARGETARCH}"
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+
+      # 3️⃣ Update Helm chart values
+      - name: Update Helm chart
+        uses: mikefarah/yq@master
+        with:
+          cmd: yq -i '.image.tag=strenv(VERSION) | .image.os=strenv(TARGETOS) | .image.arch=strenv(TARGETARCH)' helm/values.yaml
+
+      # 4️⃣ Commit Helm chart changes
+      - name: Commit Helm chart changes
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add helm/values.yaml
+          git commit -m "Update image tag to $VERSION" || echo "No changes to commit"
+          git push origin develop
