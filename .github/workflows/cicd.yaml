@@ -16,9 +16,11 @@ jobs:
       ARCH: amd64
 
     steps:
-      # 1️⃣ Checkout repository
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      # 1️⃣ Клонируем репозиторий вручную (как требует тест)
+      - name: Checkout repository (develop branch)
+        run: |
+          git clone --depth 1 --branch develop https://github.com/andreysvirid/kbot_CICD.git .
+          git log -1 --oneline
 
       # 2️⃣ Set up Docker Buildx
       - name: Set up Docker Buildx
@@ -32,13 +34,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 4️⃣ Set image tag from commit SHA
+      # 4️⃣ Set image tag
       - name: Set image tag
         run: |
           SHORT_SHA=$(git rev-parse --short HEAD)
-          IMAGE_TAG="v1.0.0-${SHORT_SHA}-${OS}-${ARCH}"
-          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-          echo "Using tag: $IMAGE_TAG"
+          echo "IMAGE_TAG=v1.0.0-${SHORT_SHA}-${OS}-${ARCH}" >> $GITHUB_ENV
+          echo "IMAGE_TAG=$IMAGE_TAG"
 
       # 5️⃣ Build and Push Docker image
       - name: Build and Push Docker image
@@ -46,7 +47,8 @@ jobs:
           docker buildx build \
             --platform ${{ env.OS }}/amd64 \
             -t ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG }} \
-            --push .
+            --push \
+            .
 
       # 6️⃣ Install yq v4
       - name: Install yq v4
@@ -54,17 +56,14 @@ jobs:
           sudo wget https://github.com/mikefarah/yq/releases/download/v4.45.1/yq_linux_amd64 -O /usr/local/bin/yq
           sudo chmod +x /usr/local/bin/yq
 
-      # 7️⃣ Update helm/values.yaml with new image tag
+      # 7️⃣ Update helm/values.yaml
       - name: Update helm/values.yaml
         run: |
-          yq e -i ".image.registry = \"${IMAGE_REGISTRY}\"" helm/values.yaml
-          yq e -i ".image.repository = \"${IMAGE_REPOSITORY}\"" helm/values.yaml
           yq e -i ".image.tag = \"${IMAGE_TAG}\"" helm/values.yaml
           yq e -i ".image.os = \"${OS}\"" helm/values.yaml
           yq e -i ".image.arch = \"${ARCH}\"" helm/values.yaml
-
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add helm/values.yaml
-          git commit -m "Update image tag to ${IMAGE_TAG}" || echo "No changes to commit"
+          git commit -m "Update image tag to ${{ env.IMAGE_TAG }}" || echo "No changes to commit"
           git push origin develop || echo "Push failed, maybe no changes"
