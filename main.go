@@ -4,6 +4,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"strconv"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -27,7 +28,6 @@ func main() {
 
 	updates := bot.GetUpdatesChan(u)
 
-	// Ініціалізація генератора випадкових чисел
 	rand.Seed(time.Now().UnixNano())
 
 	for update := range updates {
@@ -35,13 +35,10 @@ func main() {
 			continue
 		}
 
-		// Генерація випадкового числа від 1 до 6
 		roll := rand.Intn(6) + 1
+		text := "🎲 Ви кинули кості: " + strconv.Itoa(roll)
 
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, 
-		                            "🎲 Ви кинули кості: " + 
-		                            string(rune('0'+roll))) // перетворення int -> string
-
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
 		_, err := bot.Send(msg)
 		if err != nil {
 			log.Println("Failed to send message:", err)
