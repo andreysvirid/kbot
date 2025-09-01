@@ -1,0 +1,79 @@
+Ок, распишем пошагово цепочку CI/CD для твоего Telegram бота с GHCR и Helm/ArgoCD:
+
+1️⃣ Push в GitHub (develop)
+
+Разработчик пушит изменения в ветку develop.
+
+Срабатывает GitHub Actions workflow, так как настроен on: push для develop.
+
+2️⃣ Checkout репозитория
+
+actions/checkout@v3 клонирует репозиторий на виртуальную машину GitHub Actions.
+
+Все файлы, включая Dockerfile, Makefile, и helm/values.yaml, становятся доступны для последующих шагов.
+
+3️⃣ Сборка Docker образа
+
+docker buildx build собирает контейнер по Dockerfile.
+
+Образ получает тег:
+
+ghcr.io/<user>/<repo>:v1.0.0-<short_sha>-linux-amd64
+
+
+где <short_sha> — короткий хеш текущего коммита.
+
+4️⃣ Push Docker образа в GHCR
+
+docker login с помощью secrets.GITHUB_TOKEN логинится в GHCR.
+
+docker push отправляет образ в ghcr.io/<user>/<repo>.
+
+5️⃣ Обновление Helm values
+
+yq редактирует helm/values.yaml:
+
+image:
+  registry: ghcr.io
+  repository: <user>/<repo>
+  tag: v1.0.0-<short_sha>
+  os: linux
+  arch: amd64
+
+
+Обновлённый YAML теперь указывает на новый образ, который только что собран.
+
+6️⃣ Commit изменений Helm chart
+
+Git конфигурируется под GitHub Actions:
+
+git config user.name "github-actions"
+git config user.email "github-actions@github.com"
+
+
+git add helm/values.yaml
+
+git commit -m "update version $VERSION" || echo "No changes"
+
+git push origin develop
+
+Это гарантирует, что Helm chart всегда актуален с новым образом.
+
+7️⃣ ArgoCD / Kubernetes deploy
+
+ArgoCD следит за репозиторием Helm chart.
+
+При изменении values.yaml ArgoCD автоматически применяет обновления в кластере Kubernetes.
+
+Новая версия Telegram бота развёртывается.
+
+Итог
+
+Каждый пуш в develop → CI собирает образ → пушит в GHCR → обновляет Helm → ArgoCD развертывает новую версию.
+
+Контейнер с тегом:
+
+ghcr.io/<user>/<repo>:v1.0.0-<short_sha>-linux-amd64
+
+
+values.yaml всегда синхронизирован с тегом образа.
